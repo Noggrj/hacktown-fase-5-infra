@@ -1,0 +1,37 @@
+# Roteamento HTTP via Ingress NGINX (instalado pelo Terraform, ver
+# terraform/helm.tf). Aplicado via kubectl na CI, não pelo Terraform —
+# mesma convenção usada em autorepair-infra-k8s/k8s/kong/*.yaml na
+# Fase 4 (regras de roteamento como manifesto k8s puro, infra do
+# controller via Terraform/Helm).
+#
+# Sem rewrite: cada serviço já registra suas rotas com o prefixo
+# incluso (ex. POST /auth/login, GET /videos/{id}) — o Ingress só
+# encaminha o path original, sem remover o prefixo (equivalente ao
+# strip_path=false do Kong usado em autorepair-infra-k8s).
+#
+# Processing Worker e Notification Service não aparecem aqui: nenhum
+# dos dois expõe rota de negócio, só consomem Kafka.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fiapx
+  namespace: fiapx
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: fiapx-auth
+                port:
+                  number: 80
+          - path: /videos
+            pathType: Prefix
+            backend:
+              service:
+                name: fiapx-video
+                port:
+                  number: 80

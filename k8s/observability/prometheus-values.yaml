@@ -1,0 +1,29 @@
+# Faz o Prometheus (instalado via kube-prometheus-stack) honrar as
+# annotations prometheus.io/scrape|port|path já presentes em cada
+# k8s/base/deployment.yaml dos 4 serviços fiapx-* — sem isso, seria
+# preciso criar um ServiceMonitor por serviço (CRD do Prometheus
+# Operator), redundante com uma annotation que já faz o mesmo trabalho.
+prometheus:
+  prometheusSpec:
+    additionalScrapeConfigs:
+      - job_name: "fiapx-services"
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["fiapx"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: replace
+            target_label: app
