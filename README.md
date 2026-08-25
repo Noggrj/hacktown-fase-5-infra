@@ -82,6 +82,18 @@ kubectl apply -f ../fiapx-infra/k8s/ingress/rules.yaml
 # aplicar os Jobs de migration do Postgres (ver k8s/migrations/)
 ```
 
+## Testando a API
+
+[`docs/postman/fiapx-collection.json`](docs/postman/fiapx-collection.json)
+— coleção Postman completa dos 4 serviços (Auth, Video, Worker,
+Notification): register/login/me, upload/list/get/download de vídeo, e
+os endpoints de operação (`/health`, `/ready`, `/metrics`) de cada um.
+Login salva o JWT automaticamente em `{{token}}`; upload salva o
+`{{video_id}}` — as demais requests já usam essas variáveis. As URLs
+base já apontam pras portas do `docker-compose.yml` da raiz do projeto
+(`8081`-`8084`); troque as variáveis da coleção se for testar contra um
+cluster real.
+
 ## Destruir
 
 ```bash

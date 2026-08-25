@@ -1,0 +1,271 @@
+{
+  "info": {
+    "name": "FIAP X — Sistema de Processamento de Vídeos (Fase 5)",
+    "description": "Coleção completa dos 4 microsserviços: Auth Service, Video Service, Processing Worker e Notification Service.\n\n**Fluxo recomendado (nessa ordem):**\n1. `Auth Service > Register` — cria o usuário.\n2. `Auth Service > Login` — salva o JWT automaticamente na variável `{{token}}` (script de teste).\n3. `Video Service > Upload Video` — selecione um arquivo de vídeo (.mp4/.avi/.mov/.mkv/.wmv/.flv/.webm) no campo `video` do form-data. Salva o `id` retornado em `{{video_id}}` automaticamente.\n4. Aguarde ~10-30s (o worker roda o ffmpeg de forma assíncrona) e rode `Video Service > List Videos` ou `Get Video by ID` pra ver o status mudar de `PENDING` para `DONE` ou `FAILED`.\n5. Se `DONE`, rode `Video Service > Download Video` pra pegar a URL pré-assinada do zip.\n6. Se `FAILED`, confira o e-mail de erro no Mailpit (http://localhost:8025 quando rodando via docker-compose).\n\n**Pré-requisito:** o sistema rodando (`docker compose up -d` na raiz do projeto, ou os 4 serviços + Postgres×2 + Redis + Kafka + S3/MinIO + SMTP configurados manualmente). As URLs base já apontam para as portas do `docker-compose.yml` local — ajuste as variáveis de ambiente da coleção se estiver testando contra o cluster em produção.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "auth_base_url", "value": "http://localhost:8081" },
+    { "key": "video_base_url", "value": "http://localhost:8082" },
+    { "key": "worker_base_url", "value": "http://localhost:8083" },
+    { "key": "notification_base_url", "value": "http://localhost:8084" },
+    { "key": "user_email", "value": "tester@fiapx.local" },
+    { "key": "user_password", "value": "supersecret123" },
+    { "key": "token", "value": "" },
+    { "key": "video_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth Service",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+            },
+            "url": { "raw": "{{auth_base_url}}/auth/register", "host": ["{{auth_base_url}}"], "path": ["auth", "register"] },
+            "description": "Cria um usuário novo. `password` precisa ter no mínimo 8 caracteres. Retorna 409 se o e-mail já existir — nesse caso pule direto pro Login."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.token) {",
+                  "    pm.collectionVariables.set(\"token\", body.token);",
+                  "    console.log(\"token salvo em {{token}}\");",
+                  "}",
+                  "pm.test(\"200 OK com token\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(body.token).to.be.a(\"string\").and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+            },
+            "url": { "raw": "{{auth_base_url}}/auth/login", "host": ["{{auth_base_url}}"], "path": ["auth", "login"] },
+            "description": "Retorna `{\"token\": \"...\"}` (JWT HS256 válido por 24h). O script de teste desta request salva o token automaticamente em `{{token}}` — todas as outras requests protegidas já usam essa variável no header Authorization."
+          },
+          "response": []
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{auth_base_url}}/auth/me", "host": ["{{auth_base_url}}"], "path": ["auth", "me"] },
+            "description": "Retorna `userId`/`email` extraídos do próprio JWT — útil para confirmar que o token em `{{token}}` está válido."
+          },
+          "response": []
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{auth_base_url}}/health", "host": ["{{auth_base_url}}"], "path": ["health"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Ready",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{auth_base_url}}/ready", "host": ["{{auth_base_url}}"], "path": ["ready"] },
+            "description": "Checa a conexão com o Postgres do Auth Service."
+          },
+          "response": []
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{auth_base_url}}/metrics", "host": ["{{auth_base_url}}"], "path": ["metrics"] },
+            "description": "Scrape Prometheus (texto plano, não JSON)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Video Service",
+      "item": [
+        {
+          "name": "Upload Video",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set(\"video_id\", body.id);",
+                  "    console.log(\"video_id salvo:\", body.id);",
+                  "}",
+                  "pm.test(\"202 Accepted\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "video", "type": "file", "src": [] }
+              ]
+            },
+            "url": { "raw": "{{video_base_url}}/videos", "host": ["{{video_base_url}}"], "path": ["videos"] },
+            "description": "Selecione um arquivo no campo `video` (aba Body > form-data) antes de enviar — extensões aceitas: mp4, avi, mov, mkv, wmv, flv, webm. Responde 202 imediatamente com status `PENDING`; o processamento roda de forma assíncrona no Processing Worker. O `id` retornado é salvo automaticamente em `{{video_id}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "List Videos",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{video_base_url}}/videos", "host": ["{{video_base_url}}"], "path": ["videos"] },
+            "description": "Lista todos os vídeos do usuário autenticado (dono do `{{token}}`), com o `status` atual de cada um (`PENDING` | `DONE` | `FAILED`). Lê do cache Redis com fallback pro Postgres."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Video by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{video_base_url}}/videos/{{video_id}}",
+              "host": ["{{video_base_url}}"],
+              "path": ["videos", "{{video_id}}"]
+            },
+            "description": "404 se o vídeo não existir OU se pertencer a outro usuário (nunca revela qual dos dois motivos, de propósito)."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Video",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{video_base_url}}/videos/{{video_id}}/download",
+              "host": ["{{video_base_url}}"],
+              "path": ["videos", "{{video_id}}", "download"]
+            },
+            "description": "Retorna `{\"url\": \"...\"}` — uma URL pré-assinada do S3 (ou MinIO local) válida por 15 minutos, com o .zip dos frames extraídos. Retorna 409 se o vídeo ainda não estiver `DONE`."
+          },
+          "response": []
+        },
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{video_base_url}}/health", "host": ["{{video_base_url}}"], "path": ["health"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Ready",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{video_base_url}}/ready", "host": ["{{video_base_url}}"], "path": ["ready"] },
+            "description": "Checa Postgres, Redis e S3/MinIO."
+          },
+          "response": []
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{video_base_url}}/metrics", "host": ["{{video_base_url}}"], "path": ["metrics"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Processing Worker",
+      "description": "Sem rotas de negócio — só consome video.uploaded do Kafka e publica video.processed/video.failed. Só os 3 endpoints de operação abaixo.",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{worker_base_url}}/health", "host": ["{{worker_base_url}}"], "path": ["health"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Ready",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{worker_base_url}}/ready", "host": ["{{worker_base_url}}"], "path": ["ready"] },
+            "description": "Checa Redis (idempotência) e S3/MinIO."
+          },
+          "response": []
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{worker_base_url}}/metrics", "host": ["{{worker_base_url}}"], "path": ["metrics"] }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notification Service",
+      "description": "Sem rotas de negócio — só consome video.failed do Kafka e envia e-mail via SMTP. Só os 3 endpoints de operação abaixo.",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{notification_base_url}}/health", "host": ["{{notification_base_url}}"], "path": ["health"] }
+          },
+          "response": []
+        },
+        {
+          "name": "Ready",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{notification_base_url}}/ready", "host": ["{{notification_base_url}}"], "path": ["ready"] },
+            "description": "Checa Redis (idempotência) e o servidor SMTP configurado."
+          },
+          "response": []
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{notification_base_url}}/metrics", "host": ["{{notification_base_url}}"], "path": ["metrics"] }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
