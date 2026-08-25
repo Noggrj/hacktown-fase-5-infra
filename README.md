@@ -3,10 +3,10 @@
 Infraestrutura AWS (Terraform) + Kafka/Redis/Prometheus/Ingress (Helm) do
 sistema de processamento de vídeos FIAP X — Hackathon SOAT (Fase 5).
 Provisiona o que os 4 microsserviços (
-[`fiapx-auth-service`](https://github.com/noggrj/fiapx-auth-service),
-[`fiapx-video-service`](https://github.com/noggrj/fiapx-video-service),
-[`fiapx-processing-worker`](https://github.com/noggrj/fiapx-processing-worker),
-[`fiapx-notification-service`](https://github.com/noggrj/fiapx-notification-service))
+[`fiapx-auth-service`](https://github.com/noggrj/hacktown-fase-5-auth-service),
+[`fiapx-video-service`](https://github.com/noggrj/hacktown-fase-5-video-service),
+[`fiapx-processing-worker`](https://github.com/noggrj/hacktown-fase-5-processing-worker),
+[`fiapx-notification-service`](https://github.com/noggrj/hacktown-fase-5-notification-service))
 precisam pra rodar em produção.
 
 ## O que este repo provisiona
