@@ -139,10 +139,7 @@ services:
         condition: service_healthy
 
   video-service:
-    build:
-      context: ../../fiapx-video-service
-      additional_contexts:
-        fiapx-events: ../../fiapx-events
+    build: ../../fiapx-video-service
     environment:
       PORT: "8080"
       APP_ENV: development
@@ -170,10 +167,7 @@ services:
         condition: service_completed_successfully
 
   worker:
-    build:
-      context: ../../fiapx-processing-worker
-      additional_contexts:
-        fiapx-events: ../../fiapx-events
+    build: ../../fiapx-processing-worker
     environment:
       PORT: "8080"
       APP_ENV: development
@@ -195,10 +189,7 @@ services:
         condition: service_completed_successfully
 
   notification-service:
-    build:
-      context: ../../fiapx-notification-service
-      additional_contexts:
-        fiapx-events: ../../fiapx-events
+    build: ../../fiapx-notification-service
     environment:
       PORT: "8080"
       APP_ENV: development
