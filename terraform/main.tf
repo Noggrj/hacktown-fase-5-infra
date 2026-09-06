@@ -141,6 +141,27 @@ resource "aws_s3_bucket" "videos" {
   force_destroy = true
 }
 
+resource "aws_s3_bucket_cors_configuration" "videos" {
+  bucket = aws_s3_bucket.videos.id
+
+  # O frontend baixa o zip de frames via fetch() (pra descompactar no
+  # navegador e mostrar a galeria, não só "salvar arquivo") — sem CORS
+  # aqui, o navegador bloqueia a leitura da resposta mesmo com a URL
+  # pré-assinada sendo válida. GET only: a única forma de acessar
+  # qualquer objeto deste bucket é via URL pré-assinada (bucket é
+  # privado, ver aws_s3_bucket_public_access_block abaixo) — a própria
+  # assinatura já é o controle de acesso, então liberar a origem pra
+  # "*" não amplia o que já é acessível, só permite o navegador LER a
+  # resposta de uma URL que ele já teria permissão de baixar de outra
+  # forma (download direto).
+  cors_rule {
+    allowed_methods = ["GET"]
+    allowed_origins = ["*"]
+    allowed_headers = ["*"]
+    max_age_seconds = 3600
+  }
+}
+
 resource "aws_s3_bucket_versioning" "videos" {
   bucket = aws_s3_bucket.videos.id
   versioning_configuration {
