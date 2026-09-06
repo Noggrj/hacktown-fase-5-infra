@@ -1,0 +1,232 @@
+name: fiapx
+
+# Sobe o sistema completo do FIAP X (Hackathon SOAT, Fase 5) localmente,
+# sem depender de AWS: MinIO no lugar do S3, Mailpit no lugar do SMTP
+# real (Mailtrap/Gmail), Kafka self-hosted (KRaft, single node). Postgres
+# x2 e Redis batem exatamente com o que roda em produção.
+#
+# Pressupõe os 6 repos de serviço clonados como irmãos deste (fiapx-infra),
+# não dentro dele — mesmo layout do checkout do CI de cada serviço:
+#   tech-garage/
+#   ├── fiapx-infra/local/docker-compose.yml   (este arquivo)
+#   ├── fiapx-auth-service/
+#   ├── fiapx-video-service/
+#   ├── fiapx-processing-worker/
+#   ├── fiapx-notification-service/
+#   ├── fiapx-events/
+#   └── fiapx-frontend/
+#
+# Uso (a partir desta pasta):
+#   docker compose up --build
+#   Auth:         http://localhost:8081
+#   Video:        http://localhost:8082
+#   Worker:       http://localhost:8083/health (sem rota de negócio)
+#   Notification: http://localhost:8084/health (sem rota de negócio)
+#   Frontend:     http://localhost:8085
+#   MinIO console: http://localhost:9001 (minioadmin/minioadmin)
+#   Mailpit UI:    http://localhost:8025 (mostra os e-mails de video.failed)
+
+x-jwt-secret: &jwt-secret "local-dev-jwt-secret-32-bytes-min"
+
+services:
+  postgres-auth:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: auth
+      POSTGRES_DB: fiapx_auth
+    ports: ["5433:5432"]
+    volumes:
+      - ../../fiapx-auth-service/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth -d fiapx_auth"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-video:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: video
+      POSTGRES_PASSWORD: video
+      POSTGRES_DB: fiapx_video
+    ports: ["5434:5432"]
+    volumes:
+      - ../../fiapx-video-service/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U video -d fiapx_video"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["9000:9000", "9001:9001"]
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb -p local/fiapx-videos-dev &&
+      echo 'bucket ready'
+      "
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8025:8025"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  auth-service:
+    build: ../../fiapx-auth-service
+    environment:
+      PORT: "8080"
+      APP_ENV: development
+      SERVICE_NAME: fiapx-auth-service
+      DB_URL: postgres://auth:auth@postgres-auth:5432/fiapx_auth?sslmode=disable
+      JWT_SECRET: *jwt-secret
+      CORS_ALLOWED_ORIGINS: http://localhost:8085
+    ports: ["8081:8080"]
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+
+  video-service:
+    build:
+      context: ../../fiapx-video-service
+      additional_contexts:
+        fiapx-events: ../../fiapx-events
+    environment:
+      PORT: "8080"
+      APP_ENV: development
+      SERVICE_NAME: fiapx-video-service
+      DB_URL: postgres://video:video@postgres-video:5432/fiapx_video?sslmode=disable
+      JWT_SECRET: *jwt-secret
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:9092
+      S3_BUCKET: fiapx-videos-dev
+      AWS_REGION: us-east-1
+      S3_ENDPOINT: http://minio:9000
+      S3_PRESIGN_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      CORS_ALLOWED_ORIGINS: http://localhost:8085
+    ports: ["8082:8080"]
+    depends_on:
+      postgres-video:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ../../fiapx-processing-worker
+      additional_contexts:
+        fiapx-events: ../../fiapx-events
+    environment:
+      PORT: "8080"
+      APP_ENV: development
+      SERVICE_NAME: fiapx-processing-worker
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:9092
+      S3_BUCKET: fiapx-videos-dev
+      AWS_REGION: us-east-1
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+    ports: ["8083:8080"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  notification-service:
+    build:
+      context: ../../fiapx-notification-service
+      additional_contexts:
+        fiapx-events: ../../fiapx-events
+    environment:
+      PORT: "8080"
+      APP_ENV: development
+      SERVICE_NAME: fiapx-notification-service
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:9092
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_FROM: no-reply@fiapx.local
+    ports: ["8084:8080"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+
+  frontend:
+    build: ../../fiapx-frontend
+    environment:
+      # URLs do HOST, não da rede interna do Docker — quem faz as
+      # chamadas é o browser do usuário, não o container do nginx.
+      AUTH_API_URL: http://localhost:8081
+      VIDEO_API_URL: http://localhost:8082
+    ports: ["8085:80"]
+    depends_on:
+      auth-service:
+        condition: service_started
+      video-service:
+        condition: service_started
