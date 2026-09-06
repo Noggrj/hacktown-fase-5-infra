@@ -82,6 +82,41 @@ kubectl apply -f ../fiapx-infra/k8s/ingress/rules.yaml
 # aplicar os Jobs de migration do Postgres (ver k8s/migrations/)
 ```
 
+## Rodando localmente (sem AWS)
+
+[`local/docker-compose.yml`](local/docker-compose.yml) sobe o sistema
+completo sem depender de AWS: MinIO no lugar do S3, Mailpit no lugar do
+SMTP real, Kafka self-hosted (KRaft, single node), Postgres×2 e Redis —
+mesmo desenho do que roda em produção, só trocando os serviços gerenciados
+por equivalentes locais. Pressupõe os 6 repos de serviço clonados como
+irmãos deste (`fiapx-infra`), não dentro dele:
+
+```
+tech-garage/
+├── fiapx-infra/local/docker-compose.yml   (aqui)
+├── fiapx-auth-service/
+├── fiapx-video-service/
+├── fiapx-processing-worker/
+├── fiapx-notification-service/
+├── fiapx-events/
+└── fiapx-frontend/
+```
+
+```bash
+cd local
+docker compose up --build
+```
+
+| Serviço | URL |
+|---|---|
+| Frontend | http://localhost:8085 |
+| Auth API | http://localhost:8081 |
+| Video API | http://localhost:8082 |
+| Worker `/health` | http://localhost:8083/health |
+| Notification `/health` | http://localhost:8084/health |
+| MinIO console | http://localhost:9001 (minioadmin/minioadmin) |
+| Mailpit UI | http://localhost:8025 |
+
 ## Testando a API
 
 [`docs/postman/fiapx-collection.json`](docs/postman/fiapx-collection.json)
@@ -90,7 +125,7 @@ Notification): register/login/me, upload/list/get/download de vídeo, e
 os endpoints de operação (`/health`, `/ready`, `/metrics`) de cada um.
 Login salva o JWT automaticamente em `{{token}}`; upload salva o
 `{{video_id}}` — as demais requests já usam essas variáveis. As URLs
-base já apontam pras portas do `docker-compose.yml` da raiz do projeto
+base já apontam pras portas do `local/docker-compose.yml` acima
 (`8081`-`8084`); troque as variáveis da coleção se for testar contra um
 cluster real.
 
