@@ -75,10 +75,10 @@ resource "aws_db_instance" "services" {
   db_subnet_group_name   = aws_db_subnet_group.fiapx.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  multi_az                  = var.db_multi_az
-  publicly_accessible       = false
-  deletion_protection       = var.db_deletion_protection
-  skip_final_snapshot       = true
+  multi_az            = var.db_multi_az
+  publicly_accessible = false
+  deletion_protection = var.db_deletion_protection
+  skip_final_snapshot = true
 
   backup_retention_period = 1
 

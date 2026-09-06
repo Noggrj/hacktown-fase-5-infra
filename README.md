@@ -57,14 +57,40 @@ serviço).
 - Terraform ≥ 1.5, AWS CLI, `kubectl`, Helm ≥ 3.
 - Credenciais AWS válidas (conta AWS Academy `voclabs` — a sessão expira
   em ~4h e precisa ser renovada periodicamente).
-- Bucket S3 + tabela DynamoDB do state remoto (criados automaticamente,
-  de forma idempotente, pela CI — ver `.github/workflows/ci.yml`).
+- Bucket S3 + tabela DynamoDB do state remoto, criados manualmente uma
+  vez antes do primeiro `terraform init` (não fazem parte deste
+  Terraform — o *state* não pode ser gerenciado pelo próprio recurso
+  que ele descreve).
 
 ## Variáveis sensíveis
 
 Nunca commitadas — vêm de GitHub Secrets na CI, ou de `-var` na mão
 localmente: `auth_db_password`, `video_db_password`, `jwt_secret`,
 `smtp_user`, `smtp_password`, `grafana_admin_password`.
+
+## Testes / validação
+
+Este repo não tem lógica de aplicação (é Terraform + Helm +
+docker-compose), então "teste" aqui é validação estática — sem
+precisar de credenciais AWS nem tocar em infra real:
+
+```bash
+cd terraform
+terraform fmt -check -recursive   # formatação
+terraform init -backend=false     # baixa os providers, sem configurar o state remoto
+terraform validate                # sintaxe e referências entre recursos
+```
+
+Pra validar o `docker-compose` local (sem subir nada):
+
+```bash
+cd local
+docker compose config --quiet     # valida o YAML e os builds referenciados
+```
+
+E pra validar de fato, ponta a ponta — sobe o sistema completo local e
+segue os passos de ["Rodando localmente"](#rodando-localmente-sem-aws)
+abaixo.
 
 ## Uso local
 
