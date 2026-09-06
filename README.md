@@ -1,5 +1,9 @@
 # fiapx-infra
 
+📐 **[Documentação da arquitetura completa](docs/ARQUITETURA.md)** —
+diagrama, fluxo de eventos, decisões e o mapeamento de cada requisito do
+desafio pra como foi atendido.
+
 Infraestrutura AWS (Terraform) + Kafka/Redis/Prometheus/Ingress (Helm) do
 sistema de processamento de vídeos FIAP X — Hackathon SOAT (Fase 5).
 Provisiona o que os 4 microsserviços (
