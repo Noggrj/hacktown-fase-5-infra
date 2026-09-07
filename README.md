@@ -173,6 +173,27 @@ falha). Os números do topo (vídeos enviados/processados/com
 falha/frames/e-mails/cadastros) sobem ao vivo, o refresh do dashboard é
 automático (5s) — não precisa apertar nada.
 
+**Pra popular com bastante dado de uma vez** (em vez de clicar na mão),
+[`scripts/generate-demo-traffic.py`](scripts/generate-demo-traffic.py)
+gera tráfego real contra a API — cadastro, login (com alguns erros de
+senha de propósito), upload de vários vídeos (a maioria válida, uma
+fração inválida de propósito, pra gerar falha + e-mail de verdade):
+
+```bash
+pip install requests   # única dependência
+python3 scripts/generate-demo-traffic.py --users 15 --videos 25 --fail-rate 0.2
+```
+
+> **Nota (só na primeira subida do stack, não em restarts normais):**
+> se os contadores do dashboard ficarem em zero por mais de ~30s mesmo
+> com uploads acontecendo, é um rebalance lento do consumer group do
+> Kafka — os 4 serviços tentam entrar no group coordinator ao mesmo
+> tempo, logo que o Kafka fica saudável, num broker recém-formado
+> (`docker compose up` depois de um `down -v`). `docker compose restart
+> worker notification-service` resolve na hora (o backlog é processado
+> em menos de 1s assim que o group estabiliza) — não acontece em
+> restarts do dia a dia, só em subidas totalmente do zero.
+
 ```bash
 kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
 # login: admin / senha de grafana_admin_password (var do terraform apply)

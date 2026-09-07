@@ -1,0 +1,10 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+
+# Python (scripts/generate-demo-traffic.py)
+__pycache__/
+*.pyc
