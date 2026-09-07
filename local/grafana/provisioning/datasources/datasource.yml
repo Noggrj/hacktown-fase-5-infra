@@ -1,0 +1,12 @@
+# Provisiona o datasource Prometheus automaticamente — sem isso, o
+# Grafana sobe sem nenhuma fonte de dados configurada e o dashboard
+# provisionado (../dashboards/dashboards.yml) não teria de onde ler.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

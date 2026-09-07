@@ -1,0 +1,24 @@
+# Scrape direto por nome de serviço do docker-compose — equivalente ao
+# additionalScrapeConfigs de produção (../k8s/observability/prometheus-values.yaml),
+# só que sem service discovery do Kubernetes: aqui os 4 alvos são fixos
+# porque a topologia inteira é este arquivo de compose.
+#
+# O label "app" usa os MESMOS valores de produção (fiapx-auth,
+# fiapx-video, fiapx-worker, fiapx-notification — nomes dos Deployment
+# em cada k8s/base/deployment.yaml) mesmo os nomes de serviço do compose
+# sendo diferentes (auth-service, worker, ...) — assim o dashboard
+# (fiapx-overview.json) roda idêntico local e em produção.
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "fiapx-services"
+    static_configs:
+      - targets: ["auth-service:8080"]
+        labels: { app: "fiapx-auth" }
+      - targets: ["video-service:8080"]
+        labels: { app: "fiapx-video" }
+      - targets: ["worker:8080"]
+        labels: { app: "fiapx-worker" }
+      - targets: ["notification-service:8080"]
+        labels: { app: "fiapx-notification" }

@@ -1,0 +1,157 @@
+{
+  "uid": "fiapx-services-overview",
+  "title": "FIAP X — Serviços",
+  "tags": ["fiapx"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Vídeos enviados",
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [{ "datasource": "Prometheus", "expr": "fiapx_videos_uploaded_total", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Vídeos processados",
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [{ "datasource": "Prometheus", "expr": "fiapx_videos_processed_total", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "green" } } }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Vídeos com falha",
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [{ "datasource": "Prometheus", "expr": "fiapx_videos_failed_total", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } } }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Frames extraídos",
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [{ "datasource": "Prometheus", "expr": "fiapx_frames_extracted_total", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "purple" } } }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "E-mails de falha enviados",
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [{ "datasource": "Prometheus", "expr": "fiapx_emails_sent_total", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "orange" } } }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Usuários cadastrados",
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [{ "datasource": "Prometheus", "expr": "fiapx_users_registered_total", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Vídeos ao longo do tempo (enviado / processado / falhou)",
+      "description": "Contadores brutos, não taxa — sobem em degrau a cada evento real, fáceis de ver numa gravação curta.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "fiapx_videos_uploaded_total", "legendFormat": "enviados", "refId": "A" },
+        { "datasource": "Prometheus", "expr": "fiapx_videos_processed_total", "legendFormat": "processados", "refId": "B" },
+        { "datasource": "Prometheus", "expr": "fiapx_videos_failed_total", "legendFormat": "falharam", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter" } } }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Duração do processamento (p50 / p95)",
+      "description": "histogram_quantile sobre fiapx_video_processing_duration_seconds — tempo real do ffmpeg em cada vídeo.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.5, sum(rate(fiapx_video_processing_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.95, sum(rate(fiapx_video_processing_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Logins (sucesso vs. credencial inválida)",
+      "description": "Contadores brutos de fiapx_logins_total, por resultado.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "fiapx_logins_total", "legendFormat": "{{result}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter" } } }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Taxa de requisições HTTP por serviço (req/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "sum(rate(http_requests_total{job=\"fiapx-services\"}[5m])) by (app)", "legendFormat": "{{app}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Latência p95 HTTP por serviço",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"fiapx-services\"}[5m])) by (app, le))", "legendFormat": "{{app}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Requisições HTTP por status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "datasource": "Prometheus", "expr": "sum(rate(http_requests_total{job=\"fiapx-services\"}[5m])) by (status)", "legendFormat": "{{status}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Serviços no ar",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
+      "datasource": "Prometheus",
+      "targets": [{ "datasource": "Prometheus", "expr": "count(up{job=\"fiapx-services\"} == 1)", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 4 }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

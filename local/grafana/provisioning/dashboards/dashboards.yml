@@ -1,0 +1,14 @@
+# Diz ao Grafana pra carregar qualquer .json desta pasta como dashboard
+# — o docker-compose monta ../../k8s/observability/dashboards/fiapx-overview.json
+# (a MESMA fonte usada em produção, ver o ConfigMap gerado a partir dela
+# no README) direto num arquivo dentro dela, sem duplicar o JSON.
+apiVersion: 1
+
+providers:
+  - name: fiapx
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards

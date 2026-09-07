@@ -112,7 +112,15 @@ renove a sessão se o `apply` demorar mais que isso.
 ```bash
 aws eks update-kubeconfig --region us-east-1 --name fiapx-cluster
 kubectl apply -f k8s/ingress/rules.yaml
-kubectl apply -f k8s/observability/dashboards/   # dashboard do Grafana (ver "Monitoramento" abaixo)
+
+# Dashboard do Grafana — gerado a partir do JSON real (fonte única,
+# compartilhada com o Grafana local do docker-compose), com o label que
+# o sidecar do Grafana procura:
+kubectl create configmap fiapx-overview-dashboard -n monitoring \
+  --from-file=fiapx-overview.json=k8s/observability/dashboards/fiapx-overview.json \
+  --dry-run=client -o yaml \
+  | kubectl label -f - --local -o yaml grafana_dashboard=1 \
+  | kubectl apply -f -
 
 # Secrets (JWT_SECRET, senhas de banco, credenciais SMTP) — rode uma vez,
 # manualmente, com os valores reais (nunca commitados):
@@ -133,12 +141,37 @@ sozinho via `additionalScrapeConfigs`
 (`k8s/observability/prometheus-values.yaml`), sem precisar de
 `ServiceMonitor` por serviço.
 
-[`k8s/observability/dashboards/fiapx-overview-dashboard.yaml`](k8s/observability/dashboards/fiapx-overview-dashboard.yaml)
+[`k8s/observability/dashboards/fiapx-overview.json`](k8s/observability/dashboards/fiapx-overview.json)
 é um dashboard real do Grafana (não os genéricos que vêm de fábrica com
-o chart) — taxa de requisição, taxa de erro 5xx e latência p95 por
-serviço, breakdown por status HTTP. Carrega sozinho (sidecar do Grafana
-observa ConfigMaps com o label `grafana_dashboard=1`), sem import manual
-pela UI a cada `helm install` novo.
+o chart) — a mesma fonte usada localmente (ver `local/` mais abaixo),
+gerada num ConfigMap com o label `grafana_dashboard=1` pelo comando
+acima, que o sidecar do Grafana carrega sozinho, sem import manual pela
+UI a cada `helm install` novo. Duas seções:
+
+- **Vídeos** — contadores brutos (enviado/processado/falhou/frames/
+  e-mails/cadastros), sobem em degrau a cada evento real — pensado pra
+  aparecer claramente numa gravação curta, não só numa carga sustentada.
+- **HTTP** — taxa de requisição, taxa de erro 5xx e latência p95 por
+  serviço, breakdown por status.
+
+### Gravando o dashboard localmente (sem precisar da AWS)
+
+`local/docker-compose.yml` já sobe Prometheus + Grafana com o mesmo
+dashboard, sem nenhum passo extra — testado de ponta a ponta:
+
+```bash
+cd local
+docker compose up --build
+```
+
+Abra [http://localhost:3000](http://localhost:3000) (`admin` /
+`fiapx-local`) → **Dashboards** → **FIAP X — Serviços** já está lá.
+Deixa essa aba aberta e, numa outra, use o frontend
+([http://localhost:8085](http://localhost:8085)) normalmente — cadastro,
+login, upload de um vídeo válido e de um inválido (pra gerar sucesso e
+falha). Os números do topo (vídeos enviados/processados/com
+falha/frames/e-mails/cadastros) sobem ao vivo, o refresh do dashboard é
+automático (5s) — não precisa apertar nada.
 
 ```bash
 kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
@@ -192,6 +225,8 @@ docker compose up --build
 | Notification `/health` | http://localhost:8084/health |
 | MinIO console | http://localhost:9001 (minioadmin/minioadmin) |
 | Mailpit UI | http://localhost:8025 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 (admin/fiapx-local) — dashboard "FIAP X — Serviços" já carregado |
 
 ## Testando a API
 
