@@ -1,3 +1,16 @@
+# Faz o Grafana carregar automaticamente qualquer ConfigMap com o label
+# grafana_dashboard=1 (ver k8s/observability/dashboards/) — sem isso,
+# dashboard só entra importando manualmente pela UI a cada `helm
+# install` novo. searchNamespace "ALL" porque a dashboard fica no
+# namespace fiapx (perto do que ela mede), não no monitoring.
+grafana:
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+
 # Faz o Prometheus (instalado via kube-prometheus-stack) honrar as
 # annotations prometheus.io/scrape|port|path já presentes em cada
 # k8s/base/deployment.yaml dos 4 serviços fiapx-* — sem isso, seria

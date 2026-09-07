@@ -112,6 +112,7 @@ renove a sessão se o `apply` demorar mais que isso.
 ```bash
 aws eks update-kubeconfig --region us-east-1 --name fiapx-cluster
 kubectl apply -f k8s/ingress/rules.yaml
+kubectl apply -f k8s/observability/dashboards/   # dashboard do Grafana (ver "Monitoramento" abaixo)
 
 # Secrets (JWT_SECRET, senhas de banco, credenciais SMTP) — rode uma vez,
 # manualmente, com os valores reais (nunca commitados):
@@ -119,6 +120,30 @@ export DB_HOST=$(terraform -chdir=terraform output -raw db_endpoints | jq -r .au
        DB_PASSWORD_AUTH=... DB_PASSWORD_VIDEO=... JWT_SECRET=... \
        SMTP_HOST=... SMTP_USER=... SMTP_PASSWORD=...
 ./scripts/create-service-secrets.sh
+```
+
+## Monitoramento
+
+Prometheus + Grafana via `kube_prometheus_stack` (Helm, chart oficial
+`prometheus-community`). Os 4 serviços Go expõem `/metrics` de verdade
+(`http_requests_total`, `http_request_duration_seconds` — contagem e
+latência por rota/método/status) e cada `deployment.yaml` já leva as
+annotations `prometheus.io/scrape` — o Prometheus descobre e faz scrape
+sozinho via `additionalScrapeConfigs`
+(`k8s/observability/prometheus-values.yaml`), sem precisar de
+`ServiceMonitor` por serviço.
+
+[`k8s/observability/dashboards/fiapx-overview-dashboard.yaml`](k8s/observability/dashboards/fiapx-overview-dashboard.yaml)
+é um dashboard real do Grafana (não os genéricos que vêm de fábrica com
+o chart) — taxa de requisição, taxa de erro 5xx e latência p95 por
+serviço, breakdown por status HTTP. Carrega sozinho (sidecar do Grafana
+observa ConfigMaps com o label `grafana_dashboard=1`), sem import manual
+pela UI a cada `helm install` novo.
+
+```bash
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
+# login: admin / senha de grafana_admin_password (var do terraform apply)
+# Dashboards → FIAP X — Serviços
 ```
 
 Com isso feito, cada serviço faz o próprio deploy disparando manualmente
