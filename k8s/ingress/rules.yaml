@@ -11,6 +11,14 @@
 #
 # Processing Worker e Notification Service não aparecem aqui: nenhum
 # dos dois expõe rota de negócio, só consomem Kafka.
+#
+# fiapx-frontend fica no mesmo Ingress, na raiz (/) — de propósito:
+# serve o SPA e as duas APIs pela mesma origem, então
+# AUTH_API_URL/VIDEO_API_URL do frontend ficam "" (mesma origem, ver
+# k8s/base/configmap.yaml do fiapx-frontend) e CORS deixa de ser
+# necessário em produção. nginx ingress ordena por prefixo mais
+# específico automaticamente — /auth e /videos sempre vencem de / não
+# importa a ordem aqui, mas a raiz fica por último por legibilidade.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -33,5 +41,12 @@ spec:
             backend:
               service:
                 name: fiapx-video
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: fiapx-frontend
                 port:
                   number: 80

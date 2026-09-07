@@ -17,7 +17,7 @@ precisam pra rodar em produção.
 
 | Via | Recurso |
 |---|---|
-| Terraform | VPC, cluster EKS + node group, 2× RDS PostgreSQL (Auth, Video), 4× ECR, bucket S3 (vídeos), namespace `fiapx` |
+| Terraform | VPC, cluster EKS + node group, 2× RDS PostgreSQL (Auth, Video), 5× ECR (4 serviços + frontend), bucket S3 (vídeos), namespace `fiapx` |
 | Helm (`terraform/helm.tf`) | Ingress NGINX, Kafka self-hosted (Bitnami, KRaft, 1 broker), Redis (Bitnami, standalone), kube-prometheus-stack (Prometheus + Grafana) |
 | `kubectl` (CI, fora do Terraform) | Regras de `Ingress` (`k8s/ingress/rules.yaml`), Jobs de migration do Postgres |
 
@@ -92,7 +92,7 @@ E pra validar de fato, ponta a ponta — sobe o sistema completo local e
 segue os passos de ["Rodando localmente"](#rodando-localmente-sem-aws)
 abaixo.
 
-## Uso local
+## Provisionando a AWS de verdade
 
 ```bash
 cd terraform
@@ -103,14 +103,35 @@ terraform plan \
 terraform apply ...
 ```
 
-## Depois do `apply`
+Cria VPC, EKS, 2× RDS, 5× ECR e o bucket S3 — ~15-20 min. Numa conta AWS
+Academy `voclabs`, as credenciais são temporárias (expiram em ~4h);
+renove a sessão se o `apply` demorar mais que isso.
+
+## Depois do `apply` — deixando o cluster pronto pro primeiro deploy
 
 ```bash
 aws eks update-kubeconfig --region us-east-1 --name fiapx-cluster
-kubectl apply -f ../fiapx-infra/k8s/ingress/rules.yaml
-# aplicar os Secrets reais de cada serviço (ver scripts/create-service-secrets.sh)
-# aplicar os Jobs de migration do Postgres (ver k8s/migrations/)
+kubectl apply -f k8s/ingress/rules.yaml
+
+# Secrets (JWT_SECRET, senhas de banco, credenciais SMTP) — rode uma vez,
+# manualmente, com os valores reais (nunca commitados):
+export DB_HOST=$(terraform -chdir=terraform output -raw db_endpoints | jq -r .auth) \
+       DB_PASSWORD_AUTH=... DB_PASSWORD_VIDEO=... JWT_SECRET=... \
+       SMTP_HOST=... SMTP_USER=... SMTP_PASSWORD=...
+./scripts/create-service-secrets.sh
 ```
+
+Com isso feito, cada serviço faz o próprio deploy disparando manualmente
+o job `deploy` do seu `ci.yml` no GitHub Actions (build → push pro ECR →
+`kubectl apply` → migration, quando tem banco → rollout). Ver a seção
+"Deploy" do README de cada repo pros Secrets/Variables que ele espera —
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_SESSION_TOKEN` (as
+mesmas credenciais temporárias, uma vez por repo) e
+`S3_BUCKET_NAME` como Variable (não Secret — não é sensível), com o
+valor de `terraform output videos_bucket_name`, nos repos que falam com
+S3 (`video-service`, `processing-worker`). Nenhum desses jobs roda
+sozinho em push/PR — só via disparo manual (workflow_dispatch),
+justamente porque pressupõem que os passos acima já rodaram.
 
 ## Rodando localmente (sem AWS)
 

@@ -1,6 +1,6 @@
 # ============================================================
 # FIAP X — Infraestrutura (Hackathon SOAT, Fase 5)
-# Provisiona: VPC, EKS Cluster, ECR (4 serviços), S3 (vídeos),
+# Provisiona: VPC, EKS Cluster, ECR (4 serviços + frontend), S3 (vídeos),
 # namespace k8s. Kafka/Redis/Prometheus/Ingress vêm via Helm — ver
 # helm.tf. RDS (Auth + Video) vêm via rds.tf.
 # ============================================================
@@ -27,6 +27,7 @@ locals {
     video        = "fiapx-video-service"
     worker       = "fiapx-processing-worker"
     notification = "fiapx-notification-service"
+    frontend     = "fiapx-frontend"
   }
 }
 
